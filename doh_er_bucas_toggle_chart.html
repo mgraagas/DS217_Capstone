@@ -1,0 +1,200 @@
+
+<style>
+  .annot-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:1.25rem; }
+  .annot-pill { padding:10px 14px; border-radius:8px; font-size:12px; line-height:1.5; }
+  .annot-pill strong { font-weight:500; display:block; margin-bottom:1px; }
+  .annot-pill span { font-size:11px; color:var(--color-text-secondary); }
+  .annot-er { background:rgba(197,48,48,0.07); border:0.5px solid rgba(197,48,48,0.22); color:#C53030; }
+  .annot-bk { background:rgba(39,103,73,0.07); border:0.5px solid rgba(39,103,73,0.22); color:#276749; }
+  .chart-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+  .toggle-group { display:flex; gap:8px; }
+  .toggle-btn { font-size:12px; font-weight:500; padding:6px 16px; border-radius:100px; border:1.5px solid transparent; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all 0.18s; }
+  .toggle-btn .dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .er-btn { background:rgba(43,108,176,0.08); border-color:rgba(43,108,176,0.25); color:#2B6CB0; }
+  .er-btn.active { background:#2B6CB0; border-color:#2B6CB0; color:#fff; }
+  .bk-btn { background:rgba(197,48,48,0.08); border-color:rgba(197,48,48,0.25); color:#C53030; }
+  .bk-btn.active { background:#C53030; border-color:#C53030; color:#fff; }
+  .legend-row { display:flex; gap:14px; font-size:12px; color:var(--color-text-secondary); flex-wrap:wrap; }
+  .legend-row span { display:flex; align-items:center; gap:5px; }
+  .leg-sq { width:10px; height:10px; border-radius:2px; display:inline-block; flex-shrink:0; }
+  #hover-callout { display:flex; align-items:center; gap:12px; height:36px; padding:0 12px; margin-bottom:10px; border-radius:var(--border-radius-md); background:var(--color-background-secondary); font-size:12px; visibility:hidden; overflow:hidden; }
+  #hc-name { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0; }
+  #hc-y24, #hc-y25, #hc-chg { white-space:nowrap; flex-shrink:0; }
+</style>
+
+<div style="margin-bottom:1.25rem;">
+  <p style="font-size:17px;font-weight:500;color:var(--color-text-primary);margin:0 0 5px;line-height:1.35;">ER Visits Declined as BUCAS Utilization Increased in 2025</p>
+  <p style="font-size:13px;color:var(--color-text-secondary);margin:0;line-height:1.6;">Comparison of 2024 and 2025 visits per DOH hospital.</p>
+</div>
+
+<div class="annot-row">
+  <div class="annot-pill annot-er">
+    <strong>ER visits declined by −17,832 (−2.0%)</strong>
+    <span>from 2024 to 2025</span>
+  </div>
+  <div class="annot-pill annot-bk">
+    <strong>BUCAS utilization surged by +282,336 (+168.7%)</strong>
+    <span>from 2024 to 2025</span>
+  </div>
+</div>
+
+<div class="chart-top">
+  <div class="toggle-group">
+    <button class="toggle-btn er-btn active" id="btn-er" onclick="switchView('er')">
+      <span class="dot" style="background:currentColor;"></span>ER visits
+    </button>
+    <button class="toggle-btn bk-btn" id="btn-bk" onclick="switchView('bk')">
+      <span class="dot" style="background:currentColor;"></span>BUCAS visits
+    </button>
+  </div>
+  <div class="legend-row">
+    <span><span class="leg-sq" id="leg-24"></span><span id="leg-24-lbl">2024 ER visits</span></span>
+    <span><span class="leg-sq" id="leg-25"></span><span id="leg-25-lbl">2025 ER visits</span></span>
+  </div>
+</div>
+
+<div id="hover-callout">
+  <span id="hc-name"></span>
+  <span id="hc-y24"></span>
+  <span id="hc-y25"></span>
+  <span id="hc-chg"></span>
+</div>
+
+<div style="position:relative;width:100%;height:580px;">
+  <canvas id="drillChart" role="img" aria-label="Grouped horizontal bar chart showing 2024 and 2025 ER or BUCAS visits per DOH hospital."></canvas>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const HOSPITALS=[
+  {name:"Batangas MC",            v24:53381,  v25:47814,  b24:7569,   b25:14190 },
+  {name:"Cagayan Valley MC",      v24:52906,  v25:56570,  b24:3135,   b25:27896 },
+  {name:"Conner DH",              v24:10559,  v25:11326,  b24:700,    b25:1492  },
+  {name:"Davao Occidental GH",    v24:6696,   v25:8089,   b24:4681,   b25:9645  },
+  {name:"Davao Regional MC",      v24:62459,  v25:50139,  b24:31427,  b25:78070 },
+  {name:"Dr. Jose N. Rodriguez",  v24:119758, v25:112694, b24:18497,  b25:23327 },
+  {name:"Dr. Paulino Garcia MRC", v24:69075,  v25:65819,  b24:4660,   b25:24181 },
+  {name:"Eastern Visayas MC",     v24:41469,  v25:34240,  b24:8200,   b25:15396 },
+  {name:"Far North Luzon GH",     v24:18730,  v25:19387,  b24:752,    b25:3077  },
+  {name:"Ilocos Training & RMC",  v24:78377,  v25:70237,  b24:21694,  b25:68387 },
+  {name:"Jose B. Lingad MGH",     v24:118491, v25:124688, b24:50301,  b25:137907},
+  {name:"Luis Hora MRH",          v24:11598,  v25:11044,  b24:1300,   b25:2044  },
+  {name:"Mariano Marcos MH",      v24:38720,  v25:46673,  b24:2440,   b25:2355  },
+  {name:"Quirino MMC",            v24:87951,  v25:89970,  b24:172,    b25:1391  },
+  {name:"Siargao Island MC",      v24:12140,  v25:13264,  b24:38,     b25:1829  },
+  {name:"Southern Isabela MC",    v24:19059,  v25:24125,  b24:9865,   b25:24804 },
+  {name:"Southern Tagalog RH",    v24:32113,  v25:29711,  b24:1469,   b25:10645 },
+  {name:"Zamboanga City MC",      v24:70454,  v25:70314,  b24:486,    b25:3086  },
+];
+
+const BLUE='#2B6CB0',BLUE_M='rgba(43,108,176,0.52)',BLUE_F='rgba(43,108,176,0.11)';
+const RED='#C53030',RED_M='rgba(197,48,48,0.52)',RED_F='rgba(197,48,48,0.11)';
+const GREEN='#276749';
+const dark=matchMedia('(prefers-color-scheme:dark)').matches;
+const gc=dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+const lc=dark?'#aaa':'#718096';
+
+let currentView='er', activeHoverIdx=null, chart=null;
+
+function getColors(n,hoverIdx,full,fade){return Array.from({length:n},(_,i)=>hoverIdx===null?full:i===hoverIdx?full:fade);}
+
+function buildChart(view){
+  const isER=view==='er';
+  const FULL=isER?BLUE:RED, MID=isER?BLUE_M:RED_M, FADE=isER?BLUE_F:RED_F;
+  const sorted=[...HOSPITALS].sort((a,b)=>isER?b.v24-a.v24:b.b24-a.b24);
+
+  document.getElementById('leg-24').style.background=MID;
+  document.getElementById('leg-25').style.background=FULL;
+  document.getElementById('leg-24-lbl').textContent=isER?'2024 ER visits':'2024 BUCAS visits';
+  document.getElementById('leg-25-lbl').textContent=isER?'2025 ER visits':'2025 BUCAS visits';
+  document.getElementById('btn-er').className='toggle-btn er-btn'+(isER?' active':'');
+  document.getElementById('btn-bk').className='toggle-btn bk-btn'+(!isER?' active':'');
+
+  if(chart){chart.destroy();chart=null;}
+  activeHoverIdx=null;
+  document.getElementById('hover-callout').style.visibility='hidden';
+
+  const drillLabelPlugin={id:'drillLabels',afterDatasetsDraw(ch){
+    const{ctx}=ch;ctx.save();ctx.textBaseline='middle';ctx.textAlign='left';
+    const isDk=matchMedia('(prefers-color-scheme:dark)').matches;
+    ch.data.datasets.forEach((_,di)=>{
+      ch.getDatasetMeta(di).data.forEach((bar,i)=>{
+        const val=ch.data.datasets[di].data[i];const isH=activeHoverIdx===i;
+        ctx.font=isH?'600 10px sans-serif':'400 10px sans-serif';
+        ctx.fillStyle=isH?(isDk?'#fff':'#111'):(isDk?'rgba(255,255,255,0.42)':'rgba(0,0,0,0.32)');
+        ctx.fillText(val.toLocaleString(),bar.x+5,bar.y);
+      });
+    });ctx.restore();
+  }};
+
+  const d24=sorted.map(h=>isER?h.v24:h.b24);
+  const d25=sorted.map(h=>isER?h.v25:h.b25);
+
+  chart=new Chart(document.getElementById('drillChart'),{
+    type:'bar',plugins:[drillLabelPlugin],
+    data:{
+      labels:sorted.map(h=>h.name),
+      datasets:[
+        {label:'2024',data:d24,backgroundColor:getColors(18,null,MID,FADE),borderRadius:2},
+        {label:'2025',data:d25,backgroundColor:getColors(18,null,FULL,FADE),borderRadius:2}
+      ]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      animation:{duration:500,easing:'easeOutQuart'},
+      layout:{padding:{right:104}},
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{
+        x:{ticks:{color:lc,font:{size:11},callback:v=>v>=1000?(v/1000).toFixed(0)+'k':v},grid:{color:gc}},
+        y:{ticks:{color:lc,font:{size:11}},grid:{color:gc}}
+      },
+      onHover:(e,els)=>{document.getElementById('drillChart').style.cursor=els.length?'pointer':'default';}
+    }
+  });
+
+  const dc=document.getElementById('drillChart');
+  dc.onmousemove=evt=>{
+    const els=chart.getElementsAtEventForMode(evt,'nearest',{intersect:true},false);
+    if(!els.length){
+      if(activeHoverIdx!==null){
+        activeHoverIdx=null;
+        chart.data.datasets[0].backgroundColor=getColors(18,null,MID,FADE);
+        chart.data.datasets[1].backgroundColor=getColors(18,null,FULL,FADE);
+        chart.update('none');
+        document.getElementById('hover-callout').style.visibility='hidden';
+      }return;
+    }
+    const i=els[0].index;if(i===activeHoverIdx)return;
+    activeHoverIdx=i;
+    chart.data.datasets[0].backgroundColor=getColors(18,i,FULL,FADE);
+    chart.data.datasets[1].backgroundColor=getColors(18,i,FULL,FADE);
+    chart.update('none');
+
+    const h=sorted[i];
+    const y24=isER?h.v24:h.b24,y25=isER?h.v25:h.b25,diff=y25-y24;
+    const chg=y24>0?((diff/y24)*100).toFixed(1):null;
+    const chgCol=chg&&parseFloat(chg)<0?RED:GREEN;
+    const arr=chg?parseFloat(chg)>=0?'▲':'▼':'';
+
+    document.getElementById('hc-name').textContent=h.name;
+    document.getElementById('hc-name').style.color=FULL;
+    document.getElementById('hc-y24').textContent=`2024: ${y24.toLocaleString()}`;
+    document.getElementById('hc-y24').style.color=lc;
+    document.getElementById('hc-y25').textContent=`2025: ${y25.toLocaleString()}`;
+    document.getElementById('hc-y25').style.color=lc;
+    document.getElementById('hc-chg').textContent=chg?`${arr}${Math.abs(chg)}% (${diff>0?'+':''}${diff.toLocaleString()})`: '';
+    document.getElementById('hc-chg').style.color=chgCol;
+    document.getElementById('hover-callout').style.visibility='visible';
+  };
+  dc.onmouseleave=()=>{
+    activeHoverIdx=null;
+    chart.data.datasets[0].backgroundColor=getColors(18,null,MID,FADE);
+    chart.data.datasets[1].backgroundColor=getColors(18,null,FULL,FADE);
+    chart.update('none');
+    document.getElementById('hover-callout').style.visibility='hidden';
+  };
+}
+
+function switchView(view){if(view===currentView)return;currentView=view;buildChart(view);}
+buildChart('er');
+</script>
